@@ -7,8 +7,25 @@
     <title>Document</title>
 </head>
 <body>
-    <div class="container-fluid">
-        <h1>URL Shortener</h1>
+    <div class="container-fluid p-5 ">
+        <div style = "max-width:500px" class = "mx-auto">
+            <h1 class = "text-center text-md">URL Shortener</h1>
+            <form action="/api/shorten" method="POST">
+                <div class="form-group">
+                    <label for="link">Enter your URL</label>
+                    <input type="text" name="link" id="link" class = "form-control">
+                    <small class="form-text text-muted">URL must start with http:// or https://</small>
+                </div>
+                <button type = "submit" class="btn btn-primary btn-block">Shorten URL</button>
+            </form>
+            {{if .}}
+            <div class = "mt-3">
+                <div class="alert alert-success" role="alert">
+                Here's the shortened URL: <a href={{.}}>{{.}}</a>
+                </div>
+            </div>
+            {{end}}
+        </div>
     </div>
 </body>
 </html>
