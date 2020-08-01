@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -52,6 +53,7 @@ func main() {
 	router.LoadHTMLGlob("views/*")
 
 	router.GET("/", func(c *gin.Context) {
+		fmt.Println(c.Request.Host)
 		if currentLink == "" {
 			c.HTML(200, "index.gohtml", nil)
 		} else {
@@ -130,7 +132,7 @@ func main() {
 			"url": "http://localhost:4000/" + randomID,
 		})*/
 
-		currentLink = "http://localhost:4000/" + randomID
+		currentLink = "http://" + c.Request.Host + "/" + randomID
 
 		c.Redirect(http.StatusSeeOther, "/")
 
