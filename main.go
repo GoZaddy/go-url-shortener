@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"time"
 
@@ -79,31 +80,64 @@ func main() {
 			return
 		}
 
-		c.Redirect(http.StatusPermanentRedirect, url.OriginalURL)
+		if (url.ExpiresAt != time.Time{}) {
+			if time.Now().Before(url.ExpiresAt) {
+				fmt.Println("not expired!")
+				c.Redirect(http.StatusTemporaryRedirect, url.OriginalURL)
+			} else {
+				fmt.Println("expired!")
+				c.JSON(http.StatusNotFound, gin.H{"message": "Sorry! This link has expired"})
+			}
+		} else {
+			c.Redirect(http.StatusPermanentRedirect, url.OriginalURL)
+		}
+
 	})
 
 	router.POST("/api/shorten", func(c *gin.Context) {
+		var randomID string
+		var expiresAt time.Time
+
 		var urlInRequest struct {
-			Link string `form:"link" json:"link" binding:"required"`
+			Link         string `form:"link" json:"link" binding:"required"`
+			Result       string `form:"result" json:"result"`               //optional
+			ExpiresAfter string `form:"expires_after" json:"expires_after"` //must be in minutes - optional
 		}
 
+		//validation
 		if c.Request.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
 			urlInRequest.Link = c.PostForm("link")
+			urlInRequest.Result = c.PostForm("result")
+			urlInRequest.ExpiresAfter = c.PostForm("expires_after")
+
 		} else {
 			if err := c.ShouldBindJSON(&urlInRequest); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+				c.JSON(http.StatusBadRequest, gin.H{"message": "bad request"})
 				return
 			}
 		}
+
 		if _, err := url.ParseRequestURI(urlInRequest.Link); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid url"})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid url"})
 			return
 		}
-		randomID := generateRandomString()
 
-		urlModel := models.URL{
-			ID:          randomID,
-			OriginalURL: urlInRequest.Link,
+		fmt.Println(urlInRequest)
+
+		if urlInRequest.Result == "" {
+			randomID = generateRandomString()
+		} else {
+			randomID = urlInRequest.Result
+		}
+
+		if urlInRequest.ExpiresAfter == "" {
+			expiresAt = time.Time{}
+		} else {
+			minutes, err := strconv.Atoi(urlInRequest.ExpiresAfter)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid duration"})
+			}
+			expiresAt = time.Now().Add(time.Duration(int64(minutes)) * time.Minute)
 		}
 
 		for {
@@ -113,28 +147,38 @@ func main() {
 					break
 				}
 				c.JSON(500, gin.H{
-					"error": "Internal Server error!",
+					"message": "Internal Server error!",
 				})
+				return
+			}
+			if urlInRequest.Result != "" {
+				c.JSON(http.StatusConflict, gin.H{"message": "This link already exists! Use another link"})
 				return
 			}
 			randomID = generateRandomString()
 		}
 
+		urlModel := models.URL{
+			ID:          randomID,
+			OriginalURL: urlInRequest.Link,
+			ExpiresAt:   expiresAt,
+		}
+
 		_, err := linksCol.InsertOne(context.Background(), urlModel)
 		if err != nil {
 			c.JSON(500, gin.H{
-				"error": "Internal Server error: error writing url to DB",
+				"message": "Internal Server error: error writing url to DB",
 			})
 			return
 		}
 
-		/*c.JSON(200, gin.H{
-			"url": "http://localhost:4000/" + randomID,
-		})*/
+		c.JSON(200, gin.H{
+			"url": "http://" + c.Request.Host + "/" + randomID,
+		})
 
-		currentLink = "http://" + c.Request.Host + "/" + randomID
+		//currentLink = "http://" + c.Request.Host + "/" + randomID
 
-		c.Redirect(http.StatusSeeOther, "/")
+		//c.Redirect(http.StatusSeeOther, "/")
 
 	})
 
