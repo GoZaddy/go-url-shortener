@@ -29,14 +29,21 @@ func init() {
 	godotenv.Load(".env")
 	//connect to mongodb
 	connect()
-	indexModel := mongo.IndexModel{
+	linkIDIndexModel := mongo.IndexModel{
 		Keys: bson.M{
 			"link_id": 1,
 		},
 		Options: options.Index().SetUnique(true),
 	}
 
-	linksCol.Indexes().CreateOne(context.Background(), indexModel)
+	expiresAtIndexModel := mongo.IndexModel{
+		Keys: bson.M{
+			"expires_at": 1,
+		},
+		Options: options.Index().SetExpireAfterSeconds(int32(120)),
+	}
+
+	linksCol.Indexes().CreateMany(context.Background(), []mongo.IndexModel{linkIDIndexModel, expiresAtIndexModel})
 }
 
 func generateRandomString() string {
@@ -51,17 +58,6 @@ func generateRandomString() string {
 
 func main() {
 	router := gin.Default()
-	router.LoadHTMLGlob("views/*")
-
-	router.GET("/", func(c *gin.Context) {
-		fmt.Println(c.Request.Host)
-		if currentLink == "" {
-			c.HTML(200, "index.gohtml", nil)
-		} else {
-			c.HTML(200, "index.gohtml", currentLink)
-		}
-
-	})
 
 	router.GET("/:linkID", func(c *gin.Context) {
 		var url models.URL
@@ -176,11 +172,7 @@ func main() {
 			"url": "http://" + c.Request.Host + "/" + randomID,
 		})
 
-		//currentLink = "http://" + c.Request.Host + "/" + randomID
-
-		//c.Redirect(http.StatusSeeOther, "/")
-
 	})
 
-	router.Run()
+	router.Run(":9990")
 }
